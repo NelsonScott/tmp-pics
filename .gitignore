@@ -8,10 +8,6 @@ ios/Config/Local.xcconfig
 *.p8
 *.cer
 *.certSigningRequest
-# Owner's own phone-install plumbing (machine specific)
-ios/scripts/ios-reinstall.sh
-ios/scripts/mac-ios-build.sh
-ios/scripts/mac-ios-build.plist
 
 # State, logs, QA output
 *.log

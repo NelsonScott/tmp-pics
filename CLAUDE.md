@@ -1,9 +1,7 @@
 # Tmp (temporary camera)
 
 A small iPhone camera for throwaway photos. Shots go into one Photos album and expire; the app tracks
-only the assets it created and clears expired ones with one batched delete (iOS confirms). The selling
-point is that it is open source and verifiably private: no networking code, no dependencies, no
-analytics, no account. Home screen name "Tmp".
+only the assets it created and clears expired ones with one batched delete (iOS confirms). No networking code, no dependencies, no analytics, no account. Home screen name "Tmp".
 
 ## Stack
 - SwiftUI, Swift 5.10 language mode, iOS 17+, iPhone only, no third-party packages. AVFoundation and PhotoKit.
@@ -48,8 +46,7 @@ analytics, no account. Home screen name "Tmp".
 - UI copy short and plain, no em dashes. The camera screen and viewer are always dark; intro, home and
   settings follow the system. Filled buttons are the bright yellow with black content; accent-coloured text
   uses AccentColor (darker in light mode for 4.5:1 contrast).
-- Mac: one xcodebuild at a time, own simulator ("Tmp iPhone 16 iOS18"), shut it down after, never quit
-  Xcode, no `pkill -f`. Do not install on a real phone or touch App Store Connect unless asked.
+- Do not install on a real phone or touch App Store Connect unless asked.
 
 ## Done means
 Unit tests pass, `qa/e2e.sh` prints `PASS: e2e`, you looked at the light and dark screenshots it made,

@@ -1,5 +1,7 @@
 # Tmp
 
+<img src="docs/icon.png" width="96" alt="Tmp app icon">
+
 A camera for photos you only need for a little while: where you parked, a printer test page, a label, a
 receipt you will type in later. Shots go into an album called Tmp and expire after 24 hours (or a time you
 choose).
@@ -7,6 +9,8 @@ choose).
 Apps like this already exist. I wrote this one because I did not want to hand my photo library to an app
 from a developer I knew nothing about, some with ads and trackers. So here, you can see all the source
 code. Small, no network code, and you can check everything yourself.
+
+<img src="docs/intro.png" width="240" alt="First run screen"> <img src="docs/home.png" width="240" alt="Home screen"> <img src="docs/settings.png" width="240" alt="Settings">
 
 ## How it works
 
@@ -33,13 +37,17 @@ Needs iOS 17 or later, iPhone only. You need a Mac with Xcode and [xcodegen](htt
 ```sh
 git clone https://github.com/NelsonScott/tmp-pics.git
 cd tmp-pics/ios
+```
+
+Open `Config/App.xcconfig` and change `APP_BUNDLE_ID` to one of your own, like `com.yourname.tmp`. The
+current one belongs to my developer account, so Xcode can't sign it for you. Then:
+
+```sh
 xcodegen generate
 open TmpCamera.xcodeproj
 ```
 
-Change `APP_BUNDLE_ID` in `ios/Config/App.xcconfig` to one of your own (mine is registered to me) before
-you generate the project. Then in Xcode, pick your team under Signing & Capabilities, choose your iPhone
-and press Run.
+In Xcode, pick your team under Signing & Capabilities, choose your iPhone and press Run.
 
 ## Licence
 
