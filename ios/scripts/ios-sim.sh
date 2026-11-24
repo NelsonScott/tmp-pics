@@ -10,8 +10,9 @@
 #   ios-sim.sh shot NAME           screenshot to /tmp/tmp-sim-qa/NAME.png on the Mac
 #   ios-sim.sh appearance light|dark
 #   ios-sim.sh statusbar [clear]   9:41, full battery and bars (App Store screenshots); clear undoes it
-#   ios-sim.sh photos-reset        revoke Photos and camera access (the next shot asks again)
-#   ios-sim.sh album [NAME]        what is in album NAME (default Tmp) in the simulator's Photos database
+#   ios-sim.sh photos-reset        reset Photos and camera access (Save to Photos and the camera ask again)
+#   ios-sim.sh files               the app's Shots folder: one file name per line, then whether it is backed up
+#   ios-sim.sh library             how many photos the simulator's Photos library has (read from its database)
 #   ios-sim.sh log                 the app's Documents/tmp.log (needs TMP_QA_LOG=1)
 #   ios-sim.sh udid | shutdown
 #
@@ -103,26 +104,23 @@ launch() {
 container() { xcrun simctl get_app_container "$U" "$BUNDLE" data; }
 photos_db() { echo "$HOME/Library/Developer/CoreSimulator/Devices/$U/data/Media/PhotoData/Photos.sqlite"; }
 
-# Lists the assets in a user album straight from the simulator's Photos database (not through the app):
-# uuid, trashed state (0 = in library, 1 = Recently Deleted), file name, created date.
-album() {
+# The app's Shots folder, straight from the simulator's file system (not through the app).
+files() {
+  D="$(container)/Library/Application Support/Shots"
+  [ -d "$D" ] || { echo "no Shots folder"; return 0; }
+  ls -1 "$D"
+  if xattr -p com.apple.metadata:com_apple_backup_excludeItem "$D" >/dev/null 2>&1; then
+    echo "backup: excluded"
+  else
+    echo "backup: INCLUDED"
+  fi
+}
+
+# Photos in the simulator's library (not in Recently Deleted), from its Photos database.
+library() {
   DB=$(photos_db)
-  [ -f "$DB" ] || { echo "no Photos database yet"; return 0; }
-  # The album-to-asset join table is Z_<n>ASSETS with columns Z_<n>ALBUMS and Z_<m>ASSETS; n and m vary by iOS.
-  num() { echo "(name GLOB '$1' OR name GLOB '$2')"; }
-  JT=$(sqlite3 "$DB" "SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND EXISTS (SELECT 1 FROM
-    pragma_table_info(m.name) WHERE $(num 'Z_[0-9]ALBUMS' 'Z_[0-9][0-9]ALBUMS'))
-    AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE $(num 'Z_[0-9]ASSETS' 'Z_[0-9][0-9]ASSETS'))" | head -1)
-  [ -n "$JT" ] || { echo "FAIL: album join table not found in $DB"; return 1; }
-  AC=$(sqlite3 "$DB" "SELECT name FROM pragma_table_info('$JT') WHERE $(num 'Z_[0-9]ALBUMS' 'Z_[0-9][0-9]ALBUMS')")
-  SC=$(sqlite3 "$DB" "SELECT name FROM pragma_table_info('$JT') WHERE $(num 'Z_[0-9]ASSETS' 'Z_[0-9][0-9]ASSETS')")
-  sqlite3 -header -column "$DB" "
-    SELECT a.ZUUID AS uuid, a.ZTRASHEDSTATE AS trashed, a.ZFILENAME AS file,
-           datetime(a.ZDATECREATED + 978307200, 'unixepoch') AS created
-    FROM ZGENERICALBUM g JOIN $JT j ON j.$AC = g.Z_PK JOIN ZASSET a ON a.Z_PK = j.$SC
-    WHERE g.ZTITLE = '$1' AND g.ZTRASHEDSTATE = 0 ORDER BY a.ZDATECREATED;"
-  echo "albums named '$1': $(sqlite3 "$DB" "SELECT count(*) FROM ZGENERICALBUM WHERE ZTITLE = '$1' AND ZTRASHEDSTATE = 0")"
-  echo "library: $(sqlite3 "$DB" "SELECT count(*) FROM ZASSET WHERE ZTRASHEDSTATE = 0") photos, $(sqlite3 "$DB" "SELECT count(*) FROM ZASSET WHERE ZTRASHEDSTATE = 1") in Recently Deleted"
+  [ -f "$DB" ] || { echo "library: 0 photos (no database yet)"; return 0; }
+  echo "library: $(sqlite3 "$DB" "SELECT count(*) FROM ZASSET WHERE ZTRASHEDSTATE = 0") photos"
 }
 
 CMD=${1:-run}
@@ -172,11 +170,13 @@ case "$CMD" in
   photos-reset)
     boot
     xcrun simctl privacy "$U" reset photos "$BUNDLE" 2>/dev/null || true
+    xcrun simctl privacy "$U" reset photos-add "$BUNDLE" 2>/dev/null || true
     xcrun simctl privacy "$U" reset camera "$BUNDLE" 2>/dev/null || true
     echo "Photos and camera access reset" ;;
-  album) album "${1:-Tmp}" ;;
+  files) files ;;
+  library) library ;;
   log) cat "$(container)/Documents/tmp.log" ;;
   udid) echo "$U" ;;
   shutdown) xcrun simctl shutdown "$U" 2>/dev/null || true; echo "shut down $NAME" ;;
-  *) sed -n '2,26p' "$0"; exit 2 ;;
+  *) sed -n '2,27p' "$0"; exit 2 ;;
 esac

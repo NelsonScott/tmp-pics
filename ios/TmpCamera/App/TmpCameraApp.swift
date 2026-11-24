@@ -11,7 +11,7 @@ struct TmpCameraApp: App {
                 .environmentObject(model)
                 .onChange(of: phase, initial: true) { _, newPhase in
                     switch newPhase {
-                    case .active: Task { await model.becameActive() }
+                    case .active: model.becameActive()
                     case .background: model.resignedActive()
                     default: break
                     }

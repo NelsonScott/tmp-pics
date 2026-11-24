@@ -31,13 +31,10 @@ struct CameraScreen: View {
             setZoom(1)
         }
         .onDisappear { model.cameraDisappeared() }
-        .alert("Photos access is off", isPresented: $model.photosOffAlert) {
-            Button("Open Settings") { openSettings() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Shots are saved to Photos, so the app needs access to save them.")
-        }
     }
+
+    /// Camera access was refused: no shutter, just the way to Settings.
+    private var blocked: Bool { !model.camera.isMock && model.cameraAccess == .denied }
 
     // MARK: Pieces
 
@@ -61,7 +58,7 @@ struct CameraScreen: View {
                     .background(Capsule().fill(.yellow))
             }
             Spacer()
-            if model.camera.hasFlash && !front {
+            if model.camera.hasFlash && !front && model.canShoot {
                 RoundIcon(systemName: flash ? "bolt.fill" : "bolt.slash", tint: flash ? .yellow : .white,
                           label: flash ? "Flash on" : "Flash off") { flash.toggle() }
                     .accessibilityIdentifier("flash")
@@ -93,7 +90,9 @@ struct CameraScreen: View {
             .clipped()
         .contentShape(Rectangle())
         .gesture(pinch)
-        .overlay(alignment: .bottom) { zoomPills.padding(.bottom, 12) }
+        .overlay(alignment: .bottom) {
+            if model.canShoot { zoomPills.padding(.bottom, 12) }
+        }
     }
 
     private var zoomPills: some View {
@@ -126,6 +125,8 @@ struct CameraScreen: View {
                 }
             }
             .buttonStyle(ShutterStyle())
+            .disabled(!model.canShoot)
+            .opacity(model.canShoot ? 1 : 0.25)
             .accessibilityLabel("Take photo")
             .accessibilityIdentifier("shutter")
             Spacer()
@@ -134,6 +135,8 @@ struct CameraScreen: View {
                 front.toggle()
                 setZoom(1)
             }
+            .disabled(!model.canShoot)
+            .opacity(model.canShoot ? 1 : 0.25)
             .accessibilityIdentifier("flip")
         }
         .padding(.horizontal, 28)
@@ -141,12 +144,13 @@ struct CameraScreen: View {
         .animation(.spring(duration: 0.3), value: model.cameraSessionShots.count)
     }
 
-    /// The newest shot from this visit, with how many were saved. Empty until the first save.
+    /// The newest shot from this visit, with how many were taken. It appears the moment the shutter is
+    /// pressed (the photo finishes saving behind it). Empty until the first shot.
     @ViewBuilder private var lastShot: some View {
         let shots = model.cameraSessionShots
         if let last = shots.last {
             Button(action: close) {
-                Thumbnail(id: last, pixels: 160)
+                Thumbnail(id: last, file: model.recent.first { $0.id == last }?.file ?? "")
                     .frame(width: 52, height: 52)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(.white.opacity(0.8), lineWidth: 1.5))
@@ -162,7 +166,7 @@ struct CameraScreen: View {
                     .id(last)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
-            .accessibilityLabel(shots.count == 1 ? "1 photo saved. Done" : "\(shots.count) photos saved. Done")
+            .accessibilityLabel(shots.count == 1 ? "1 photo taken. Done" : "\(shots.count) photos taken. Done")
             .accessibilityValue("\(shots.count)")
             .accessibilityIdentifier("last-shot")
         } else {
@@ -172,17 +176,34 @@ struct CameraScreen: View {
 
     private var cameraOff: some View {
         VStack(spacing: 12) {
-            Image(systemName: "camera").font(.largeTitle)
-            Text(model.cameraAccess == .denied ? "Camera access is off" : "Starting camera")
+            Image(systemName: blocked ? "video.slash" : "camera")
+                .font(.largeTitle)
+                .accessibilityHidden(true)
+            Text(blocked ? "Camera access is off" : "Starting camera")
                 .font(.headline)
-            if model.cameraAccess == .denied {
-                Button("Open Settings", action: openSettings)
-                    .buttonStyle(.borderedProminent)
+            if blocked {
+                Text("Turn it on in Settings to take photos.")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                Button(action: openSettings) {
+                    Text("Open Settings")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 20)
+                        .frame(minHeight: 44)
+                        .background(Capsule().fill(Color.brightAccent))
+                }
+                .padding(.top, 4)
+                .accessibilityIdentifier("camera-settings")
             }
         }
+        .padding(24)
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(white: 0.08))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(blocked ? "camera-off" : "camera-starting")
     }
 
     @ViewBuilder private var toast: some View {
@@ -215,6 +236,7 @@ struct CameraScreen: View {
     }
 
     private func shoot() {
+        guard model.canShoot else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.easeOut(duration: 0.05)) { shutterFlash = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
@@ -254,7 +276,7 @@ struct RoundIcon: View {
 }
 
 extension Color {
-    /// The yellow fill behind black glyphs and text (camera button, Start, Clear, badges), in both modes.
+    /// The yellow fill behind black glyphs and text (camera button, Start, badges), in both modes.
     /// Text drawn in the accent uses AccentColor instead, which is darker in light mode for contrast.
     static let brightAccent = Color(red: 1, green: 0.78, blue: 0.18)
 }

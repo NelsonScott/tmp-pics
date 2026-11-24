@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// Full screen view of the app's own shots. Swipe between them; Share, Keep or Delete now.
+/// Full screen view of the app's shots. Swipe between them; Share, Save to Photos, Delete.
 struct ViewerScreen: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let start: Shot
     @State private var selection: String = ""
     @State private var images: [String: UIImage] = [:]
-    @State private var deleting = false
+    @State private var confirmDelete = false
+    @State private var saving = false
 
     private var shots: [Shot] { model.recent }
     private var current: Shot? { shots.first { $0.id == selection } }
@@ -17,7 +18,7 @@ struct ViewerScreen: View {
             TabView(selection: $selection) {
                 ForEach(shots) { shot in
                     ZStack {
-                        if let image = images[shot.id] {
+                        if let image = images[shot.id] ?? model.quickImage(shot.id) {
                             Image(uiImage: image).resizable().scaledToFit()
                         } else {
                             ProgressView()
@@ -25,7 +26,7 @@ struct ViewerScreen: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .tag(shot.id)
-                    .task { await load(shot.id) }
+                    .task(id: shot.file) { await load(shot) }
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -40,7 +41,6 @@ struct ViewerScreen: View {
                     if let current {
                         Text(remainingPhrase(model.remaining(current)))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(model.remaining(current) <= 0 ? Color.brightAccent : .primary)
                             .accessibilityIdentifier("viewer-expiry")
                     }
                 }
@@ -48,17 +48,38 @@ struct ViewerScreen: View {
             .safeAreaInset(edge: .bottom) { actionBar }
             .toolbarBackground(.visible, for: .navigationBar)
         }
+        .overlay(alignment: .top) { toast }
         .tint(.brightAccent)
         .onAppear { selection = start.id }
+        // A shot can expire or be deleted while it is showing: move on, or close when none are left.
+        .onChange(of: shots.map(\.id)) { _, ids in
+            if !ids.contains(selection) { showNextOrClose() }
+        }
+        .confirmationDialog("Delete this photo?", isPresented: $confirmDelete, titleVisibility: .hidden) {
+            Button("Delete Photo", role: .destructive) {
+                if let current { model.delete(current) }
+            }
+            .accessibilityIdentifier("confirm-delete")
+        }
+        .alert("Photos access is off", isPresented: $model.photosOffAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("To save photos, let Tmp add to Photos in Settings.")
+        }
         // A photo viewer reads best on black in both modes, and the status bar stays light.
         .preferredColorScheme(.dark)
     }
 
     @ViewBuilder private var actionBar: some View {
         if let current {
+            let saved = model.fileURL(current)
             HStack {
-                if let image = images[current.id] {
-                    ShareLink(item: Image(uiImage: image), preview: SharePreview("Photo", image: Image(uiImage: image))) {
+                if let saved {
+                    // The original file, full size, exactly as the camera made it.
+                    ShareLink(item: saved) {
                         BarLabel(title: "Share", systemImage: "square.and.arrow.up")
                     }
                     .accessibilityIdentifier("share")
@@ -66,23 +87,23 @@ struct ViewerScreen: View {
                     BarLabel(title: "Share", systemImage: "square.and.arrow.up").opacity(0.4)
                 }
                 Button {
-                    model.keep(current)
-                    afterRemoval()
-                } label: {
-                    BarLabel(title: "Keep", systemImage: "pin")
-                }
-                .accessibilityIdentifier("keep")
-                Button(role: .destructive) {
                     Task {
-                        deleting = true
-                        if await model.deleteNow(current) { afterRemoval() }
-                        deleting = false
+                        saving = true
+                        await model.saveToPhotos(current)
+                        saving = false
                     }
+                } label: {
+                    BarLabel(title: "Save to Photos", systemImage: "square.and.arrow.down")
+                }
+                .disabled(saved == nil || saving)
+                .accessibilityIdentifier("save-to-photos")
+                Button(role: .destructive) {
+                    confirmDelete = true
                 } label: {
                     BarLabel(title: "Delete", systemImage: "trash")
                 }
                 .tint(.red)
-                .disabled(deleting)
+                .disabled(saved == nil)
                 .accessibilityIdentifier("delete")
             }
             .padding(.top, 10)
@@ -91,15 +112,29 @@ struct ViewerScreen: View {
         }
     }
 
-    private func load(_ id: String) async {
-        guard images[id] == nil else { return }
-        let scale = UIScreen.main.scale
-        let size = CGSize(width: UIScreen.main.bounds.width * scale, height: UIScreen.main.bounds.height * scale)
-        images[id] = await model.library.image(for: id, size: size, contentMode: .aspectFit)
+    @ViewBuilder private var toast: some View {
+        if let message = model.toast {
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(Capsule().fill(Color(white: 0.2)))
+                .padding(.top, 56)
+                .transition(.opacity)
+                .accessibilityIdentifier("toast")
+        }
     }
 
-    /// After Keep or Delete the shot leaves the list: show the next one, or close when none are left.
-    private func afterRemoval() {
+    /// The photo at screen size, from the file. While a brand-new shot is still saving, its instant
+    /// picture shows instead.
+    private func load(_ shot: Shot) async {
+        guard images[shot.id] == nil, !shot.file.isEmpty else { return }
+        let screen = UIScreen.main
+        let pixels = max(screen.bounds.width, screen.bounds.height) * screen.scale
+        images[shot.id] = await model.store.displayImage(file: shot.file, maxPixels: pixels)
+    }
+
+    private func showNextOrClose() {
         if let next = shots.first {
             selection = next.id
         } else {
@@ -116,7 +151,7 @@ private struct BarLabel: View {
     var body: some View {
         VStack(spacing: 4) {
             Image(systemName: systemImage).font(.title3)
-            Text(title).font(.caption)
+            Text(title).font(.caption).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())

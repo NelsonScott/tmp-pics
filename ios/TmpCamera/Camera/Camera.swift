@@ -16,8 +16,17 @@ protocol Camera: AnyObject {
     func stop()
     func flip()
     func setZoom(_ factor: CGFloat)
-    /// Takes one photo and returns encoded image data (HEIC or JPEG).
-    func capture(flash: Bool) async throws -> Data
+    /// A picture of what the shutter is about to save, for the thumbnail the moment the shutter is
+    /// pressed. `nil` when there is none yet (the real camera: its preview arrives with the photo).
+    func instantPreview() -> UIImage?
+    /// Takes one photo: the encoded image data (HEIC or JPEG) and, when the camera offers one, a small
+    /// upright preview that arrives with it (well before the file is written).
+    func capture(flash: Bool) async throws -> CapturedPhoto
+}
+
+struct CapturedPhoto {
+    let data: Data
+    let preview: UIImage?
 }
 
 enum CameraError: Error { case notReady, noData }
@@ -61,7 +70,7 @@ final class RealCamera: NSObject, Camera {
     private var prepared = false
     private var rotation: AVCaptureDevice.RotationCoordinator?
     private var previewAngleObservation: NSKeyValueObservation?
-    private var pending: [Int64: CheckedContinuation<Data, Error>] = [:]
+    private var pending: [Int64: CheckedContinuation<CapturedPhoto, Error>] = [:]
     weak var previewLayer: AVCaptureVideoPreviewLayer? {
         didSet { if previewLayer !== oldValue { makeRotationCoordinator() } }
     }
@@ -201,7 +210,10 @@ final class RealCamera: NSObject, Camera {
 
     // MARK: Capture
 
-    func capture(flash: Bool) async throws -> Data {
+    /// The live preview cannot be snapshotted; the photo's own small preview arrives with the capture.
+    func instantPreview() -> UIImage? { nil }
+
+    func capture(flash: Bool) async throws -> CapturedPhoto {
         guard device != nil else { throw CameraError.notReady }
         let angle = rotation?.videoRotationAngleForHorizonLevelCapture
         let settings: AVCapturePhotoSettings
@@ -213,9 +225,18 @@ final class RealCamera: NSObject, Camera {
         if let photoDimensions { settings.maxPhotoDimensions = photoDimensions }
         settings.photoQualityPrioritization = .quality
         if flash, output.supportedFlashModes.contains(.on) { settings.flashMode = .on }
+        // A small preview delivered with the photo, for the thumbnail, so nothing waits for the full image
+        // to be decoded.
+        if let format = settings.availablePreviewPhotoPixelFormatTypes.first {
+            settings.previewPhotoFormat = [
+                kCVPixelBufferPixelFormatTypeKey as String: format,
+                kCVPixelBufferWidthKey as String: Int(ShotStore.thumbnailPixels),
+                kCVPixelBufferHeightKey as String: Int(ShotStore.thumbnailPixels),
+            ]
+        }
         let id = settings.uniqueID
         let session = self.session, output = self.output
-        let data: Data = try await withCheckedThrowingContinuation { continuation in
+        let photo: CapturedPhoto = try await withCheckedThrowingContinuation { continuation in
             pending[id] = continuation
             queue.async {
                 guard session.isRunning else {
@@ -230,13 +251,13 @@ final class RealCamera: NSObject, Camera {
         }
         if QA.log {
             let expected = angle.flatMap(CaptureMath.exifOrientation(forRotationAngle:)).map { "\($0.rawValue)" } ?? "-"
-            let info = PhotoInfo(data: data).map(\.description) ?? "unreadable"
+            let info = PhotoInfo(data: photo.data).map(\.description) ?? "unreadable"
             QALog.write("camera: \(position == .front ? "front" : "back") angle=\(angle.map { "\(Int($0))" } ?? "-") expect exif=\(expected) got \(info)")
         }
-        return data
+        return photo
     }
 
-    fileprivate func finish(_ id: Int64, _ result: Result<Data, Error>) {
+    fileprivate func finish(_ id: Int64, _ result: Result<CapturedPhoto, Error>) {
         pending.removeValue(forKey: id)?.resume(with: result)
     }
 }
@@ -244,8 +265,18 @@ final class RealCamera: NSObject, Camera {
 extension RealCamera: AVCapturePhotoCaptureDelegate {
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         let id = photo.resolvedSettings.uniqueID
-        let result: Result<Data, Error>
-        if let error { result = .failure(error) } else if let data = photo.fileDataRepresentation() { result = .success(data) } else { result = .failure(CameraError.noData) }
+        let result: Result<CapturedPhoto, Error>
+        if let error {
+            result = .failure(error)
+        } else if let data = photo.fileDataRepresentation() {
+            // The preview's pixels are as the sensor read them; the photo's Exif orientation makes it upright.
+            let raw = (photo.metadata[kCGImagePropertyOrientation as String] as? UInt32) ?? 1
+            let orientation = CaptureMath.imageOrientation(CGImagePropertyOrientation(rawValue: raw) ?? .up)
+            let preview = photo.previewCGImageRepresentation().map { UIImage(cgImage: $0, scale: 1, orientation: orientation) }
+            result = .success(CapturedPhoto(data: data, preview: preview))
+        } else {
+            result = .failure(CameraError.noData)
+        }
         Task { @MainActor in self.finish(id, result) }
     }
 }
@@ -282,7 +313,7 @@ struct CameraPreview: UIViewRepresentable {
 // MARK: - Mock camera
 
 /// QA camera: an animated test pattern in the viewfinder, and capture renders a real JPEG with a
-/// timestamp and counter, so saving, albums and expiry are exercised end to end in the simulator.
+/// timestamp and counter, so saving, thumbnails and expiry are exercised end to end in the simulator.
 @MainActor
 final class MockCamera: Camera {
     let isMock = true
@@ -300,17 +331,29 @@ final class MockCamera: Camera {
     func flip() { position = position == .back ? .front : .back }
     func setZoom(_ factor: CGFloat) { zoom = max(1, min(factor, maxZoom)) }
 
-    func capture(flash: Bool) async throws -> Data {
-        count += 1
+    /// The frame the next capture will save, drawn small, so the thumbnail shows at once.
+    func instantPreview() -> UIImage? {
         #if DEBUG
-        if QA.demoPhotos {
-            guard let data = DemoScenes.photo(count).jpegData(compressionQuality: 0.85) else { throw CameraError.noData }
-            return data
-        }
+        if QA.demoPhotos { return MockFrames.shrink(DemoScenes.photo(nextNumber)) }
         #endif
-        let image = MockFrames.photo(number: count, date: Date(), front: position == .front, zoom: zoom)
-        guard let data = image.jpegData(compressionQuality: 0.85) else { throw CameraError.noData }
-        return data
+        return MockFrames.photo(number: nextNumber, date: Date(), front: position == .front, zoom: zoom, scale: 0.3)
+    }
+
+    /// Draws and encodes off the main thread, so quick taps never wait on each other.
+    func capture(flash: Bool) async throws -> CapturedPhoto {
+        count += 1
+        let number = count, front = position == .front, zoom = zoom, date = Date()
+        var demo: UIImage?
+        #if DEBUG
+        if QA.demoPhotos { demo = DemoScenes.photo(number) }
+        #endif
+        let source = demo
+        let data = await Task.detached(priority: .userInitiated) {
+            let image = source ?? MockFrames.photo(number: number, date: date, front: front, zoom: zoom)
+            return image.jpegData(compressionQuality: 0.85)
+        }.value
+        guard let data else { throw CameraError.noData }
+        return CapturedPhoto(data: data, preview: nil)
     }
 }
 
@@ -319,23 +362,27 @@ enum MockFrames {
         (.systemTeal, .systemIndigo), (.systemOrange, .systemPink), (.systemGreen, .systemBlue), (.systemPurple, .systemRed),
     ]
 
-    static func photo(number: Int, date: Date, front: Bool, zoom: CGFloat) -> UIImage {
+    /// A 1200 x 1600 test photo; `scale` < 1 draws the same picture with fewer pixels.
+    static func photo(number: Int, date: Date, front: Bool, zoom: CGFloat, scale: CGFloat = 1) -> UIImage {
         let size = CGSize(width: 1200, height: 1600)
         let colors = palette[(number - 1) % palette.count]
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         let lines = ["Mock shot #\(number)", formatter.string(from: date), front ? "front" : "back", String(format: "%.1fx", zoom)]
-        return render(size: size, top: colors.0, bottom: colors.1, lines: lines)
+        return render(size: size, top: colors.0, bottom: colors.1, lines: lines, scale: scale)
     }
 
-    /// The untracked photo QA puts in the album. It must survive every Clear.
-    static func foreignPhoto() -> UIImage {
-        render(size: CGSize(width: 1200, height: 1600), top: .systemGray, bottom: .darkGray, lines: ["Not from this app", "must survive Clear"])
-    }
-
-    static func render(size: CGSize, top: UIColor, bottom: UIColor, lines: [String]) -> UIImage {
+    /// The same picture at 30% of its pixels.
+    static func shrink(_ image: UIImage) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
+        format.scale = 0.3
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in image.draw(at: .zero) }
+    }
+
+    static func render(size: CGSize, top: UIColor, bottom: UIColor, lines: [String], scale: CGFloat = 1) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
         return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
             let cg = ctx.cgContext
             let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [top.cgColor, bottom.cgColor] as CFArray, locations: [0, 1])!

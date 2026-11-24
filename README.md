@@ -14,7 +14,7 @@ A camera for photos you only need for a day. Open source, no network code.
 </div>
 
 A camera for photos you only need for a little while: where you parked, a printer test page, a label, a
-receipt you will type in later. Shots go into an album called Tmp and expire after 24 hours (or a time you
+receipt you will type in later. Shots stay inside the app and delete themselves after 24 hours (or a time you
 choose).
 
 Apps like this already exist. I wrote this one because I did not want to hand my photo library to an app
@@ -26,18 +26,18 @@ code. Small, no network code, and you can check everything yourself.
 - The first time, one screen explains the app. After that it opens to your current shots, with the time
   left on each, and a big camera button.
 - The camera stays open so you can take a few shots. Done takes you back.
-- Tap a shot to share it, keep it (it stops expiring and stays in Photos) or delete it now.
-- Settings: how long shots last (1 hour to 7 days, or never), which album, and "Open straight to camera"
-  if you want to skip the home screen.
-- Photos are saved at the largest size the camera offers.
+- Tap a shot to share it, save it to Photos if you want to keep it, or delete it now.
+- Settings: how long shots last (1 hour to 7 days, or never), "Delete all photos now", and "Open straight
+  to camera" if you want to skip the home screen.
+- Photos are saved at the largest size the camera offers, and Share sends that original file.
 
-The app can't delete photos on its own: iOS asks you to confirm every delete. That is why shots go in an
-album called Tmp, so they are always easy to find and clear. When you open the app and something has
-expired, it offers to clear it. It only ever deletes photos it took itself.
+Shots never go into your photo library unless you tap Save to Photos. When their time is up the app deletes
+them, with nothing to confirm. iOS doesn't let an app run in the background for this, so a shot that expires
+while the app is closed is deleted the next time you open it. Deleting the app deletes all its shots.
 
 ## Privacy
 
-No ads, no account, no analytics, no network code. It is open source, so you can read all of it.
+No ads, no account, no analytics, no network code, and it never reads your photo library. It is open source, so you can read all of it.
 
 ## Build it yourself
 
@@ -60,7 +60,7 @@ In Xcode, pick your team under Signing & Capabilities, choose your iPhone and pr
 
 ## Tests
 
-Unit tests cover the expiry and tracking logic and the camera maths. They run on every push with GitHub
+Unit tests cover expiry, the photo files and the camera maths. They run on every push with GitHub
 Actions. To run them yourself: `xcodebuild test -project TmpCamera.xcodeproj -scheme TmpCamera
 -only-testing:TmpCameraTests -destination 'platform=iOS Simulator,name=iPhone 16'` from `ios/`.
 

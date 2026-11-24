@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One screen, shown once on first launch and again from Settings > How it works. No permission asks here:
-/// camera access is asked when the camera first opens, Photos access on the first shot.
+/// camera access is asked when the camera first opens.
 struct IntroScreen: View {
     @EnvironmentObject private var model: AppModel
     var buttonTitle = "Start"
@@ -21,7 +21,7 @@ struct IntroScreen: View {
                         .accessibilityAddTraits(.isHeader)
                 }
                 VStack(alignment: .leading, spacing: 28) {
-                    row("photo.on.rectangle", "Photos you take here go to your \(model.albumName) album.")
+                    row("photo.on.rectangle", "Photos stay in this app. Share one or save it to Photos any time.")
                     row("clock", expiryLine)
                     row("lock", "No account, no ads, no network. Open source.")
                 }
@@ -53,10 +53,10 @@ struct IntroScreen: View {
 
     private var expiryLine: String {
         switch model.lifetime {
-        case .never: return "Pick how long they last in Settings. You confirm every delete."
-        case .oneHour: return "They expire after an hour. You confirm the delete."
-        case .oneDay: return "They expire after a day. You confirm the delete."
-        default: return "They expire after \(model.lifetime.label). You confirm the delete."
+        case .never: return "Pick how long they last in Settings."
+        case .oneHour: return "They delete themselves after an hour."
+        case .oneDay: return "They delete themselves after 24 hours."
+        default: return "They delete themselves after \(model.lifetime.label)."
         }
     }
 

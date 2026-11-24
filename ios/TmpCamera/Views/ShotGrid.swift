@@ -11,7 +11,7 @@ struct ShotGrid: View {
             ForEach(model.recent) { shot in
                 let remaining = model.remaining(shot)
                 Button { viewing = shot } label: {
-                    GridTile(id: shot.id, remaining: remaining)
+                    GridTile(shot: shot, remaining: remaining)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("shot")
@@ -21,46 +21,53 @@ struct ShotGrid: View {
     }
 }
 
-/// Square thumbnail with a time-left chip in the corner. Expired shots are dimmed with a yellow chip.
+/// Square thumbnail with a time-left chip in the corner (none for a shot that never expires).
 private struct GridTile: View {
-    let id: String
-    let remaining: TimeInterval
+    let shot: Shot
+    let remaining: TimeInterval?
 
     var body: some View {
         Color.clear
             .aspectRatio(1, contentMode: .fit)
-            .overlay { Thumbnail(id: id, pixels: 360) }
+            .overlay { Thumbnail(id: shot.id, file: shot.file) }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .opacity(remaining <= 0 ? 0.5 : 1)
             .overlay(alignment: .bottomLeading) {
-                Text(remainingLabel(remaining))
-                    .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(remaining <= 0 ? .black : .white)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Capsule().fill(remaining <= 0 ? Color.brightAccent : Color.black.opacity(0.6)))
-                    .padding(6)
+                if let label = remainingLabel(remaining) {
+                    Text(label)
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(Color.black.opacity(0.6)))
+                        .padding(6)
+                }
             }
             .contentShape(Rectangle())
     }
 }
 
-/// A shot's image from Photos, filling its frame. Grey until it loads.
+/// A shot's thumbnail, filling its frame. It shows in the same frame the shutter is pressed: the real
+/// thumbnail if it is in memory, else the instant picture from the shutter, else a grey square that fades
+/// to the image. `file` is empty while the shot is still saving; once it is set, the real thumbnail
+/// replaces the stand-in (same picture, so nothing flickers).
 struct Thumbnail: View {
     @EnvironmentObject private var model: AppModel
     let id: String
-    var pixels: CGFloat = 174
-    @State private var image: UIImage?
+    let file: String
+    @State private var loaded: UIImage?
 
     var body: some View {
-        Group {
+        let image = loaded ?? model.quickImage(id)
+        ZStack {
+            Color(.tertiarySystemFill)
             if let image {
                 Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                Color(.tertiarySystemFill)
+                    .transition(.opacity)
             }
         }
-        .task(id: id) {
-            image = await model.library.image(for: id, size: CGSize(width: pixels, height: pixels))
+        .animation(.easeOut(duration: 0.15), value: image == nil)
+        .task(id: file) {
+            guard !file.isEmpty else { return }
+            if let thumb = await model.store.thumbnail(id: id, file: file) { loaded = thumb }
         }
     }
 }

@@ -19,19 +19,15 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>3</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>The camera takes your temporary photos. Nothing leaves your phone.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Shots are saved to an album in Photos. Full access lets the app use that album and delete its own shots when they expire. It never deletes anything else.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Shots are saved to your Photos library.</string>
-	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
-	<true/>
+	<string>Saves a photo to your Photos library when you tap Save to Photos.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

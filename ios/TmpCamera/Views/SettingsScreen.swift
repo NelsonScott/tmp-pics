@@ -1,34 +1,24 @@
-import Photos
 import SwiftUI
 
 struct SettingsScreen: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @State private var albums: [String] = []
-    @State private var newName = ""
     @State private var showIntro = false
+    @State private var confirmDeleteAll = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Photos expire after", selection: $model.lifetime) {
+                    Picker("Delete photos after", selection: $model.lifetime) {
                         ForEach(Lifetime.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
                 } header: {
-                    Text("Photos expire after")
+                    Text("Delete photos after")
                 } footer: {
-                    Text("Applies to new shots. When photos expire, tap Clear and iOS asks you to confirm the delete.")
-                }
-
-                Section {
-                    albumRows
-                } header: {
-                    Text("Album")
-                } footer: {
-                    Text("Only photos taken in this app are ever deleted. Other photos in the album are never touched.")
+                    Text("Applies to new photos.")
                 }
 
                 Section {
@@ -38,12 +28,14 @@ struct SettingsScreen: View {
                     Text("Skip the home screen when the app opens.")
                 }
 
-                Section("Photos access") {
-                    accessRow
+                Section {
+                    Button("Delete all photos now", role: .destructive) { confirmDeleteAll = true }
+                        .disabled(model.ledger.shots.isEmpty)
+                        .accessibilityIdentifier("delete-all")
                 }
 
                 Section {
-                    Text("No network access, no account, no ads, no analytics. Your photos stay in your library.")
+                    Text("Photos stay in this app. No network access, no account, no ads, no analytics.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Button("How it works") { showIntro = true }
@@ -66,7 +58,10 @@ struct SettingsScreen: View {
                     Button("Done") { dismiss() }.accessibilityIdentifier("settings-done")
                 }
             }
-            .onAppear(perform: loadAlbums)
+            .confirmationDialog(deleteAllTitle, isPresented: $confirmDeleteAll, titleVisibility: .visible) {
+                Button("Delete All", role: .destructive) { model.deleteAll() }
+                    .accessibilityIdentifier("confirm-delete-all")
+            }
         }
         .sheet(isPresented: $showIntro) {
             IntroScreen(buttonTitle: "Done") { showIntro = false }
@@ -74,83 +69,8 @@ struct SettingsScreen: View {
         }
     }
 
-    @ViewBuilder private var albumRows: some View {
-        if model.photoAccess == .full {
-            let names = Array(Set(albums + [model.albumName])).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-            ForEach(names, id: \.self) { name in
-                Button {
-                    model.albumName = name
-                } label: {
-                    HStack {
-                        Text(name).foregroundStyle(Color.primary)
-                        Spacer()
-                        if name == model.albumName {
-                            Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("album-\(name)")
-            }
-            newAlbumRow
-        } else {
-            LabeledContent("Saving to", value: model.albumName)
-            newAlbumRow
-            Text(model.photoAccess == .limited
-                 ? "With limited access, iOS does not let apps use albums. Shots are still saved and cleared."
-                 : "Allow Photos access to choose from your albums.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var newAlbumRow: some View {
-        HStack {
-            TextField("New album name", text: $newName)
-                .textInputAutocapitalization(.words)
-                .submitLabel(.done)
-                .onSubmit(useNewName)
-            Button("Use", action: useNewName)
-                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
-    }
-
-    @ViewBuilder private var accessRow: some View {
-        switch model.photoAccess {
-        case .full:
-            LabeledContent("Status", value: "Full access")
-        case .limited:
-            LabeledContent("Status", value: "Limited")
-            Button("Change in Settings", action: openSettings)
-        case .notAsked:
-            LabeledContent("Status", value: "Not asked yet")
-            Button("Allow access") {
-                Task {
-                    await model.requestPhotoAccess()
-                    loadAlbums()
-                }
-            }
-        case .off:
-            LabeledContent("Status", value: "Off")
-            Button("Open Settings", action: openSettings)
-        }
-    }
-
-    private func useNewName() {
-        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        model.albumName = name
-        if !albums.contains(name) { albums.append(name) }
-        newName = ""
-    }
-
-    private func loadAlbums() {
-        model.refreshAccess()
-        albums = PhotoLibrary.userAlbums().compactMap(\.localizedTitle)
-    }
-
-    private func openSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+    private var deleteAllTitle: String {
+        let n = model.ledger.shots.count
+        return n == 1 ? "Delete 1 photo now?" : "Delete all \(n) photos now?"
     }
 }

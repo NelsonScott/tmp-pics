@@ -20,7 +20,7 @@ enum QA {
         return n
     }
 
-    /// TMP_RESET=1: forget every tracked shot and setting at launch (fresh first run). Photos are not touched.
+    /// TMP_RESET=1: delete every shot and setting at launch (fresh first run).
     static var reset: Bool { env["TMP_RESET"] == "1" }
 
     /// TMP_LIFETIME=oneHour|oneDay|...: start with this lifetime setting.
@@ -30,22 +30,14 @@ enum QA {
     static var log: Bool { env["TMP_QA_LOG"] == "1" }
 
     #if DEBUG
-    /// TMP_QA_SEED_FOREIGN=1 (debug builds only): after Photos access is granted, add one photo to the
-    /// album that the app does NOT track, to prove Clear never deletes anything else.
-    static var seedForeign: Bool { env["TMP_QA_SEED_FOREIGN"] == "1" }
-    #else
-    static var seedForeign: Bool { false }
-    #endif
-
-    #if DEBUG
     /// TMP_DEMO_PHOTOS=1 (debug builds only): for App Store screenshots. The mock camera shows and saves
     /// stand-in photos (DemoScenes: a parking level sign, a receipt, a router sticker...) instead of numbered
     /// test frames, and the "Test mode" pill and Settings' Testing section are hidden.
     static var demoPhotos: Bool { env["TMP_DEMO_PHOTOS"] == "1" }
 
     /// TMP_DEMO_AGES=20,16,12.5 (debug builds only): hours to backdate the capture time of shot 1, 2, 3...
-    /// of a camera visit, so App Store screenshots show real "23h" labels, or shots already expired (> 24),
-    /// without the fast clock (which shows its times in seconds). Shots past the list are not backdated.
+    /// of a camera visit, so App Store screenshots show real "23h" labels without the fast clock (which
+    /// shows its times in seconds). Shots past the list are not backdated.
     static func demoAge(shot number: Int) -> TimeInterval {
         let ages = (env["TMP_DEMO_AGES"] ?? "").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         return number >= 1 && number <= ages.count ? ages[number - 1] * 3600 : 0

@@ -1,5 +1,6 @@
 import AVFoundation
 import ImageIO
+import UIKit
 
 /// Pure helpers behind the real camera, kept apart so they are unit tested (the simulator has no camera).
 enum CaptureMath {
@@ -19,6 +20,20 @@ enum CaptureMath {
         case 180: return .down
         case 270: return .left
         default: return nil
+        }
+    }
+
+    /// The UIImage orientation that shows an image with this Exif orientation upright.
+    static func imageOrientation(_ exif: CGImagePropertyOrientation) -> UIImage.Orientation {
+        switch exif {
+        case .up: return .up
+        case .upMirrored: return .upMirrored
+        case .down: return .down
+        case .downMirrored: return .downMirrored
+        case .left: return .left
+        case .leftMirrored: return .leftMirrored
+        case .right: return .right
+        case .rightMirrored: return .rightMirrored
         }
     }
 }

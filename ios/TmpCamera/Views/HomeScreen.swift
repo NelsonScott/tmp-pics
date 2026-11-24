@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The first screen on every launch: the app's current shots, a summary line, the expired banner, and one
-/// big camera button in thumb reach. Follows light and dark mode; its background matches the launch screen.
+/// The first screen on every launch: the app's current shots, a summary line, and one big camera button in
+/// thumb reach. Expired shots simply disappear from the grid. Follows light and dark mode; its background
+/// matches the launch screen.
 struct HomeScreen: View {
     @EnvironmentObject private var model: AppModel
     @State private var showSettings = false
@@ -17,8 +18,6 @@ struct HomeScreen: View {
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("summary")
                     }
-                    albumAccessBanner
-                    expiredBanner
                     if model.recent.isEmpty {
                         emptyState
                     } else {
@@ -27,7 +26,7 @@ struct HomeScreen: View {
                 }
                 .padding(.horizontal, 16)   // lines up with the large title
                 .padding(.bottom, 24)
-                .animation(.default, value: model.expiredCount)
+                .animation(.default, value: model.shotCount)
             }
             .scrollBounceBehavior(.basedOnSize)
             .background(Color(.systemBackground))
@@ -77,70 +76,8 @@ struct HomeScreen: View {
 
     private var emptyDetail: String {
         model.lifetime == .never
-            ? "Photos you take go to \(model.albumName). Pick how long they last in Settings."
-            : "Photos you take go to \(model.albumName) and expire after \(model.lifetime.label)."
-    }
-
-    /// Limited Photos access: shots are saved but iOS will not let the app use the album. One calm, lasting
-    /// note with the fix, instead of a message that flashes by in the camera.
-    @ViewBuilder private var albumAccessBanner: some View {
-        if model.photoAccess == .limited {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Photos are saved, but not in your \(model.albumName) album yet.")
-                    .font(.subheadline.weight(.medium))
-                Text("In Settings, tap Photos and choose Full Access.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                } label: {
-                    Text("Open Settings")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 18)
-                        .frame(minHeight: 44)
-                        .background(Capsule().fill(Color.brightAccent))
-                }
-                .accessibilityIdentifier("album-access-settings")
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemBackground)))
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("album-access-banner")
-        }
-    }
-
-    @ViewBuilder private var expiredBanner: some View {
-        let count = model.expiredCount
-        if count > 0 {
-            HStack(spacing: 12) {
-                Image(systemName: "clock.badge.xmark")
-                    .font(.title3)
-                    .foregroundStyle(Color.accentColor)
-                    .accessibilityHidden(true)
-                Text(count == 1 ? "1 expired photo" : "\(count) expired photos")
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    Task { await model.clearExpired() }
-                } label: {
-                    Text(model.isClearing ? "Clearing" : "Clear")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 18)
-                        .frame(minHeight: 44)
-                        .background(Capsule().fill(Color.brightAccent))
-                }
-                .disabled(model.isClearing)
-                .accessibilityIdentifier("clear")
-            }
-            .padding(.leading, 14).padding(.trailing, 8).padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemBackground)))
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("expired-banner")
-            .transition(.opacity)
-        }
+            ? "Photos you take stay here. Pick how long they last in Settings."
+            : "Photos you take stay here and delete themselves after \(model.lifetime.label)."
     }
 
     /// Round, filled, lower middle: the one thing to do here.
@@ -169,7 +106,7 @@ struct HomeScreen: View {
     }
 }
 
-/// The model's short messages ("Cleared 2 photos"), shown under the navigation bar.
+/// The model's short messages, shown under the navigation bar.
 private struct HomeToast: View {
     @EnvironmentObject private var model: AppModel
 

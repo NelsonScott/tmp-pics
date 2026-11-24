@@ -5,9 +5,8 @@ import XCTest
 /// /tmp/tmp-sim-qa/store-<name>.png on the Mac.
 ///
 /// The clock runs at normal speed. TMP_DEMO_AGES backdates each shot's capture time, so the grid shows a
-/// spread of real times left (23h down to 4h), and in test2 the two oldest are already past 24 hours.
+/// spread of real times left (23h down to 4h).
 final class StoreShotsUITests: XCTestCase {
-    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     var app: XCUIApplication!
 
     override func setUpWithError() throws {
@@ -21,7 +20,7 @@ final class StoreShotsUITests: XCTestCase {
         app.launchEnvironment["TMP_RESET"] = "1"
     }
 
-    /// Intro, camera, home, viewer, settings.
+    /// Intro, camera, home, viewer, share sheet, settings.
     func test1_Main() throws {
         app.launchEnvironment["TMP_DEMO_AGES"] = "20,16,12.5,8,3.2,0.4"
         app.launch()
@@ -43,9 +42,20 @@ final class StoreShotsUITests: XCTestCase {
 
         // Newest first: the receipt (shot 2) is the fifth tile.
         app.buttons.matching(identifier: "shot").element(boundBy: 4).tap()
-        XCTAssertTrue(app.buttons["keep"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["save-to-photos"].waitForExistence(timeout: 5))
         sleep(2)
         shot("viewer")
+
+        app.buttons["share"].tap()
+        let copy = app.buttons["Copy"]
+        let sheet = app.otherElements["ActivityListView"]
+        let end = Date().addingTimeInterval(8)
+        while !(copy.exists || sheet.exists), Date() < end { usleep(250_000) }
+        XCTAssertTrue(copy.exists || sheet.exists, "the share sheet opens")
+        sleep(2)
+        shot("share")
+        if app.buttons["Close"].exists { app.buttons["Close"].tap() } else { app.swipeDown(velocity: .fast) }
+        XCTAssertTrue(app.buttons["viewer-done"].waitForExistence(timeout: 5))
         app.buttons["viewer-done"].tap()
         XCTAssertTrue(app.buttons["open-camera"].waitForExistence(timeout: 5))
 
@@ -57,31 +67,7 @@ final class StoreShotsUITests: XCTestCase {
         app.buttons["settings-done"].tap()
     }
 
-    /// Two shots past 24 hours: the expired banner, Clear, the system delete prompt.
-    func test2_Expired() throws {
-        app.launchEnvironment["TMP_DEMO_AGES"] = "25,24.5,14,9,4,1"
-        app.launch()
-        let start = app.buttons["intro-start"]
-        XCTAssertTrue(start.waitForExistence(timeout: 10))
-        start.tap()
-
-        takeSix { _ in }
-        XCTAssertTrue(app.staticTexts["2 expired photos"].waitForExistence(timeout: 5))
-        sleep(1)
-        shot("expired")
-
-        app.buttons["clear"].tap()
-        guard let delete = systemButton(["Delete"], timeout: 10) else {
-            XCTFail("no system delete prompt")
-            return
-        }
-        sleep(1)
-        shot("delete-prompt")
-        delete.tap()
-        waitForShots(4)
-    }
-
-    /// Opens the camera, takes six shots (granting Photos access on the first), goes home.
+    /// Opens the camera, takes six shots, goes home.
     private func takeSix(after: (Int) -> Void) {
         let openCamera = app.buttons["open-camera"]
         XCTAssertTrue(openCamera.waitForExistence(timeout: 5))
@@ -91,9 +77,6 @@ final class StoreShotsUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Test mode"].exists, "no test pill in store shots")
         for n in 1...6 {
             shutter.tap()
-            if n == 1, let allow = systemButton(["Allow Full Access", "Allow Access to All Photos", "Allow"], timeout: 4) {
-                allow.tap()
-            }
             waitForSaved(n)
             after(n)
         }
@@ -115,20 +98,6 @@ final class StoreShotsUITests: XCTestCase {
         let predicate = NSPredicate { _, _ in self.app.buttons.matching(identifier: "shot").count == n }
         let exp = XCTNSPredicateExpectation(predicate: predicate, object: nil)
         XCTAssertEqual(XCTWaiter().wait(for: [exp], timeout: 10), .completed, "expected \(n) shots on the home screen", file: file, line: line)
-    }
-
-    private func systemButton(_ labels: [String], timeout: TimeInterval) -> XCUIElement? {
-        let end = Date().addingTimeInterval(timeout)
-        repeat {
-            for source in [springboard, app!] {
-                for label in labels {
-                    let button = source.alerts.buttons[label]
-                    if button.exists { return button }
-                }
-            }
-            usleep(250_000)
-        } while Date() < end
-        return nil
     }
 
     private func shot(_ name: String) {

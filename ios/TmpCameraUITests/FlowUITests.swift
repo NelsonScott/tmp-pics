@@ -1,15 +1,17 @@
 import XCTest
 
-/// The end-to-end flow in the simulator, in steps so qa/e2e.sh can read the simulator's Photos database
-/// between them:
-///   test1: fresh start, intro, empty home, camera, Photos permission prompt, three mock shots, Done,
-///          home grid, Keep one, settings, How it works.
-///   test2: wait on the home screen for the other two to expire, Clear, confirm the system delete prompt.
+/// The end-to-end flow in the simulator, in steps so qa/e2e.sh can look at the app's Shots folder and the
+/// simulator's Photos database between them:
+///   test1: fresh start, intro, empty home, camera, three mock shots, Done, home grid, viewer: Share sheet,
+///          Save to Photos (the add-only prompt), Delete one; settings, How it works.
+///   test2: wait on the home screen; the other two expire and vanish by themselves, with no prompt.
 ///   test3: "Open straight to camera" on, relaunch lands in the camera, Done goes home; then off again.
+///   test4: two shots, Settings > Delete all photos now, confirm, empty home.
+///   test5: the real camera with camera access refused: the camera-off state, no working shutter.
 /// Screenshots go to /tmp/tmp-sim-qa/<TMP_SHOT_TAG>-<name>.png on the Mac.
 final class FlowUITests: XCTestCase {
-    /// 24 hours pass in 60 seconds.
-    static let timeScale = "1440"
+    /// 24 hours pass in 2 minutes: long enough for test1 to finish with its shots still there.
+    static let timeScale = "720"
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     var app: XCUIApplication!
 
@@ -21,9 +23,8 @@ final class FlowUITests: XCTestCase {
         app.launchEnvironment["TMP_QA_LOG"] = "1"
     }
 
-    func test1_CaptureAndKeep() throws {
+    func test1_CaptureShareSaveDelete() throws {
         app.launchEnvironment["TMP_RESET"] = "1"
-        app.launchEnvironment["TMP_QA_SEED_FOREIGN"] = "1"
         app.launch()
 
         // First run: the intro, once.
@@ -36,7 +37,7 @@ final class FlowUITests: XCTestCase {
         let openCamera = app.buttons["open-camera"]
         XCTAssertTrue(openCamera.waitForExistence(timeout: 5))
         XCTAssertTrue(element("home-empty").exists)
-        XCTAssertTrue(element("home-empty").label.contains("expire after 24 hours"), "fresh install default: 24 hours")
+        XCTAssertTrue(element("home-empty").label.contains("delete themselves after 24 hours"), "fresh install default: 24 hours")
         XCTAssertGreaterThanOrEqual(openCamera.frame.height, 88, "the camera button is a big target")
         sleep(1)
         shot("02-home-empty")
@@ -48,86 +49,94 @@ final class FlowUITests: XCTestCase {
         sleep(1)
         shot("03-camera")
 
+        // No Photos prompt: shots stay in the app.
         shutter.tap()
-        // First shot asks for Photos access (unless already granted).
-        if let allow = systemButton(["Allow Full Access", "Allow Access to All Photos", "Allow"], timeout: 6) {
-            sleep(1)
-            shot("04-photos-permission")
-            allow.tap()
-        }
         waitForSaved(1)
+        XCTAssertNil(systemButton(["Allow", "Allow Full Access"], timeout: 1), "taking a photo asks for nothing")
         shutter.tap()
         waitForSaved(2)
         shutter.tap()
         waitForSaved(3)
         XCTAssertTrue(shutter.exists, "the camera stays open after each shot")
         sleep(1)
-        shot("05-camera-three-shots")
+        shot("04-camera-three-shots")
 
         app.buttons["camera-done"].tap()
         XCTAssertTrue(openCamera.waitForExistence(timeout: 5))
         waitForShots(3)
         XCTAssertTrue(element("summary").label.hasPrefix("3 photos. Next one expires in"), element("summary").label)
         sleep(1)
-        shot("06-home-three-shots")
+        shot("05-home-three-shots")
 
-        // Open the oldest and keep it.
+        // Open the oldest.
         app.buttons.matching(identifier: "shot").element(boundBy: 2).tap()
-        XCTAssertTrue(app.buttons["keep"].waitForExistence(timeout: 5))
+        let save = app.buttons["save-to-photos"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
         sleep(1)
-        shot("07-viewer")
-        app.buttons["keep"].tap()
-        XCTAssertTrue(app.buttons["viewer-done"].waitForExistence(timeout: 3))
+        shot("06-viewer")
+
+        // Share: the system share sheet with the original file.
+        app.buttons["share"].tap()
+        XCTAssertTrue(waitForShareSheet(), "the share sheet opens")
+        sleep(1)
+        shot("07-share-sheet")
+        closeShareSheet()
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+
+        // Save to Photos asks for add-only access, only now (unless it was allowed on an earlier run).
+        save.tap()
+        let saved = app.staticTexts["Saved to Photos"]
+        let end = Date().addingTimeInterval(8)
+        while !saved.exists, Date() < end {
+            if let allow = systemButton(["Allow"], timeout: 0.3) {
+                sleep(1)
+                shot("08-save-permission")
+                allow.tap()
+            }
+        }
+        XCTAssertTrue(saved.waitForExistence(timeout: 5), "Saved to Photos")
+        shot("09-saved-to-photos")
+
+        // Delete this one: a light confirm, then it is gone.
+        app.buttons["delete"].tap()
+        let confirm = app.buttons["Delete Photo"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.tap()
+        XCTAssertTrue(app.buttons["viewer-done"].waitForExistence(timeout: 3), "the viewer moves on to the next shot")
         app.buttons["viewer-done"].tap()
         waitForShots(2)
         sleep(1)
-        shot("08-after-keep")
+        shot("10-after-delete")
 
         app.buttons["settings"].tap()
         XCTAssertTrue(app.buttons["settings-done"].waitForExistence(timeout: 5))
         sleep(1)
-        shot("09-settings")
+        shot("11-settings")
         let howItWorks = app.buttons["how-it-works"]
         scrollTo(howItWorks)
-        shot("10-settings-bottom")
+        shot("12-settings-bottom")
         howItWorks.tap()
         let again = app.buttons["intro-start"]
         XCTAssertTrue(again.waitForExistence(timeout: 5))
         XCTAssertEqual(again.label, "Done")
         sleep(1)
-        shot("11-how-it-works")
+        shot("13-how-it-works")
         again.tap()
         XCTAssertTrue(app.buttons["settings-done"].waitForExistence(timeout: 5))
         app.buttons["settings-done"].tap()
     }
 
-    func test2_ExpireAndClear() throws {
+    func test2_ExpireByThemselves() throws {
         app.launch()
         XCTAssertTrue(app.buttons["open-camera"].waitForExistence(timeout: 10), "home, not the intro, from now on")
-        XCTAssertEqual(app.buttons.matching(identifier: "shot").count, 2, "the two unkept shots from test1")
-        let clear = app.buttons["clear"]
-        XCTAssertTrue(clear.waitForExistence(timeout: 120), "shots should expire within the fast clock")
-        // The banner shows as soon as the first one expires; the second follows a second or so later.
-        let summary = element("summary")
-        let allExpired = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in summary.label == "2 photos, all expired." }, object: nil)
-        XCTAssertEqual(XCTWaiter().wait(for: [allExpired], timeout: 10), .completed, summary.label)
-        XCTAssertTrue(app.staticTexts["2 expired photos"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "shot").count, 2, "the two shots left from test1")
+        shot("14-home-counting-down")
+        // 24 hours last 2 minutes. They go by themselves: no banner, no prompt, nothing to tap.
+        XCTAssertTrue(element("home-empty").waitForExistence(timeout: 180), "shots should vanish within the fast clock")
+        XCTAssertEqual(app.buttons.matching(identifier: "shot").count, 0)
+        XCTAssertEqual(springboard.alerts.count + app.alerts.count, 0, "no prompt of any kind")
         sleep(1)
-        shot("12-home-expired")
-
-        clear.tap()
-        guard let delete = systemButton(["Delete"], timeout: 10) else {
-            shot("13-no-delete-prompt")
-            XCTFail("no system delete prompt")
-            return
-        }
-        sleep(1)
-        shot("13-delete-prompt")
-        delete.tap()
-        XCTAssertTrue(element("home-empty").waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["clear"].exists)
-        sleep(1)
-        shot("14-cleared")
+        shot("15-expired-gone")
     }
 
     func test3_StraightToCamera() throws {
@@ -139,7 +148,7 @@ final class FlowUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["shutter"].waitForExistence(timeout: 10), "opens on the camera")
         sleep(1)
-        shot("15-straight-to-camera")
+        shot("16-straight-to-camera")
         app.buttons["camera-done"].tap()
         XCTAssertTrue(app.buttons["open-camera"].waitForExistence(timeout: 5), "Done still goes home")
 
@@ -148,6 +157,55 @@ final class FlowUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["open-camera"].waitForExistence(timeout: 10), "back to home first")
         XCTAssertFalse(app.buttons["shutter"].exists)
+    }
+
+    func test4_DeleteAll() throws {
+        app.launch()
+        let openCamera = app.buttons["open-camera"]
+        XCTAssertTrue(openCamera.waitForExistence(timeout: 10))
+        let before = app.buttons.matching(identifier: "shot").count
+        openCamera.tap()
+        let shutter = app.buttons["shutter"]
+        XCTAssertTrue(shutter.waitForExistence(timeout: 10))
+        shutter.tap()
+        waitForSaved(1)
+        shutter.tap()
+        waitForSaved(2)
+        app.buttons["camera-done"].tap()
+        waitForShots(before + 2)
+
+        app.buttons["settings"].tap()
+        let deleteAll = app.buttons["delete-all"]
+        XCTAssertTrue(deleteAll.waitForExistence(timeout: 5))
+        scrollTo(deleteAll)
+        deleteAll.tap()
+        let confirm = app.buttons["Delete All"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        sleep(1)
+        shot("17-delete-all")
+        confirm.tap()
+        XCTAssertFalse(deleteAll.isEnabled, "nothing left to delete")
+        app.buttons["settings-done"].tap()
+        XCTAssertTrue(element("home-empty").waitForExistence(timeout: 5))
+    }
+
+    func test5_CameraAccessOff() throws {
+        app.launchEnvironment["TMP_MOCK_CAMERA"] = "0"
+        app.resetAuthorizationStatus(for: .camera)
+        app.launch()
+        let openCamera = app.buttons["open-camera"]
+        XCTAssertTrue(openCamera.waitForExistence(timeout: 10))
+        openCamera.tap()
+        if let refuse = systemButton(["Don’t Allow", "Don't Allow"], timeout: 8) {
+            refuse.tap()
+        }
+        XCTAssertTrue(element("camera-off").waitForExistence(timeout: 5), "the camera-off state shows")
+        XCTAssertTrue(app.buttons["camera-settings"].exists, "with a way to Settings")
+        XCTAssertFalse(app.buttons["shutter"].isEnabled, "the shutter does nothing")
+        sleep(1)
+        shot("18-camera-off")
+        app.buttons["camera-done"].tap()
+        XCTAssertTrue(openCamera.waitForExistence(timeout: 5))
     }
 
     // MARK: Helpers
@@ -191,6 +249,26 @@ final class FlowUITests: XCTestCase {
         let predicate = NSPredicate { _, _ in self.app.buttons.matching(identifier: "shot").count == n }
         let exp = XCTNSPredicateExpectation(predicate: predicate, object: nil)
         XCTAssertEqual(XCTWaiter().wait(for: [exp], timeout: 10), .completed, "expected \(n) shots on the home screen", file: file, line: line)
+    }
+
+    /// The system share sheet (its own process view inside the app's window).
+    private func waitForShareSheet() -> Bool {
+        let sheet = app.otherElements["ActivityListView"]
+        let copy = app.buttons["Copy"]
+        let end = Date().addingTimeInterval(8)
+        repeat {
+            if sheet.exists || copy.exists { return true }
+            usleep(250_000)
+        } while Date() < end
+        return false
+    }
+
+    private func closeShareSheet() {
+        for label in ["Close", "close"] where app.buttons[label].exists {
+            app.buttons[label].tap()
+            return
+        }
+        app.swipeDown(velocity: .fast)
     }
 
     /// A button in a system alert, wherever iOS presents it (SpringBoard or the app's own process).
