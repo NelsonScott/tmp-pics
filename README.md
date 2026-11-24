@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/icon.png" width="96" alt="Tmp Pics app icon">
+<img src="docs/icon.png" width="96" alt="Tmp Camera app icon">
 
-# Tmp Pics
+# Tmp Camera
 
 A camera for photos you only need for a day. Open source, no network code.
 
