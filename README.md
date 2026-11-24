@@ -1,6 +1,17 @@
-# Tmp
+<div align="center">
 
-<img src="docs/icon.png" width="96" alt="Tmp app icon">
+<img src="docs/icon.png" width="96" alt="Tmp Pics app icon">
+
+# Tmp Pics
+
+A camera for photos you only need for a day. Open source, no network code.
+
+[![Tests](https://github.com/NelsonScott/tmp-pics/actions/workflows/tests.yml/badge.svg)](https://github.com/NelsonScott/tmp-pics/actions/workflows/tests.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
+<img src="docs/intro.png" width="240" alt="First run screen"> <img src="docs/home.png" width="240" alt="Home screen"> <img src="docs/settings.png" width="240" alt="Settings">
+
+</div>
 
 A camera for photos you only need for a little while: where you parked, a printer test page, a label, a
 receipt you will type in later. Shots go into an album called Tmp and expire after 24 hours (or a time you
@@ -9,8 +20,6 @@ choose).
 Apps like this already exist. I wrote this one because I did not want to hand my photo library to an app
 from a developer I knew nothing about, some with ads and trackers. So here, you can see all the source
 code. Small, no network code, and you can check everything yourself.
-
-<img src="docs/intro.png" width="240" alt="First run screen"> <img src="docs/home.png" width="240" alt="Home screen"> <img src="docs/settings.png" width="240" alt="Settings">
 
 ## How it works
 
@@ -48,6 +57,12 @@ open TmpCamera.xcodeproj
 ```
 
 In Xcode, pick your team under Signing & Capabilities, choose your iPhone and press Run.
+
+## Tests
+
+Unit tests cover the expiry and tracking logic and the camera maths. They run on every push with GitHub
+Actions. To run them yourself: `xcodebuild test -project TmpCamera.xcodeproj -scheme TmpCamera
+-only-testing:TmpCameraTests -destination 'platform=iOS Simulator,name=iPhone 16'` from `ios/`.
 
 ## Licence
 
