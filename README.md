@@ -31,8 +31,8 @@ No ads, no account, no analytics, no network code. It is open source, so you can
 Needs iOS 17 or later, iPhone only. You need a Mac with Xcode and [xcodegen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 ```sh
-git clone https://github.com/NelsonScott/tmp-camera.git
-cd tmp-camera/ios
+git clone https://github.com/NelsonScott/tmp-pics.git
+cd tmp-pics/ios
 xcodegen generate
 open TmpCamera.xcodeproj
 ```
