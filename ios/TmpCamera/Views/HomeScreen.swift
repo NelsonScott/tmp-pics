@@ -17,6 +17,7 @@ struct HomeScreen: View {
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("summary")
                     }
+                    albumAccessBanner
                     expiredBanner
                     if model.recent.isEmpty {
                         emptyState
@@ -78,6 +79,36 @@ struct HomeScreen: View {
         model.lifetime == .never
             ? "Photos you take go to \(model.albumName). Pick how long they last in Settings."
             : "Photos you take go to \(model.albumName) and expire after \(model.lifetime.label)."
+    }
+
+    /// Limited Photos access: shots are saved but iOS will not let the app use the album. One calm, lasting
+    /// note with the fix, instead of a message that flashes by in the camera.
+    @ViewBuilder private var albumAccessBanner: some View {
+        if model.photoAccess == .limited {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Photos are saved, but not in your \(model.albumName) album yet.")
+                    .font(.subheadline.weight(.medium))
+                Text("In Settings, tap Photos and choose Full Access.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                } label: {
+                    Text("Open Settings")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .background(Capsule().fill(Color.brightAccent))
+                }
+                .accessibilityIdentifier("album-access-settings")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemBackground)))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("album-access-banner")
+        }
     }
 
     @ViewBuilder private var expiredBanner: some View {

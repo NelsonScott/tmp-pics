@@ -31,7 +31,6 @@ final class AppModel: ObservableObject {
     private let defaults: UserDefaults
     private var ticker: Timer?
     private var toastTask: Task<Void, Never>?
-    private var warnedLimited = false
     private var seeded = false
 
     private enum Keys {
@@ -164,10 +163,7 @@ final class AppModel: ObservableObject {
             cameraSessionShots.append(saved.id)
             if camera.isMock, QA.log { QALog.write("camera: mock got \(PhotoInfo(data: data).map(\.description) ?? "unreadable")") }
             QALog.write("saved \(saved.id) album=\(saved.inAlbum ? albumName : "-") lifetime=\(lifetime.rawValue)")
-            if !saved.inAlbum, photoAccess == .limited, !warnedLimited {
-                warnedLimited = true
-                show("Saved. The album needs full Photos access.")
-            } else if lifetime == .never {
+            if lifetime == .never, saved.inAlbum {
                 show("Saved to \(albumName)")
             }
         } catch {
