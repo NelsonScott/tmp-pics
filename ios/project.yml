@@ -1,0 +1,67 @@
+name: TmpCamera
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/App.xcconfig
+  Release: Config/App.xcconfig
+settings:
+  base:
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.10"
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+targets:
+  TmpCamera:
+    type: application
+    platform: iOS
+    sources:
+      - path: TmpCamera
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        PRODUCT_NAME: TmpCamera
+        INFOPLIST_FILE: TmpCamera/Resources/Info.plist
+        SUPPORTS_MACCATALYST: NO
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  TmpCameraTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TmpCameraTests
+    dependencies:
+      - target: TmpCamera
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/TmpCamera.app/TmpCamera
+        BUNDLE_LOADER: $(TEST_HOST)
+        GENERATE_INFOPLIST_FILE: YES
+  TmpCameraUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: TmpCameraUITests
+    dependencies:
+      - target: TmpCamera
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).uitests
+        TEST_TARGET_NAME: TmpCamera
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  TmpCamera:
+    build:
+      targets:
+        TmpCamera: all
+        TmpCameraTests: [test]
+        TmpCameraUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - TmpCameraTests
+        - TmpCameraUITests

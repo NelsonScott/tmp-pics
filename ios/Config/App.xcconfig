@@ -1,0 +1,7 @@
+// The one place for the app's public identity. Change these two lines to rename the app.
+// Scripts (ios/scripts/ios-sim.sh) read APP_BUNDLE_ID from here too.
+APP_DISPLAY_NAME = Tmp
+APP_BUNDLE_ID = xyz.scottnelson.tmp
+
+// Optional, git-ignored: DEVELOPMENT_TEAM and other per-machine settings for device builds.
+#include? "Local.xcconfig"
