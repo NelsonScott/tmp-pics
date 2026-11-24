@@ -9,13 +9,15 @@
 #                                  --fresh uninstalls the app first, so first-run state is exercised
 #   ios-sim.sh shot NAME           screenshot to /tmp/tmp-sim-qa/NAME.png on the Mac
 #   ios-sim.sh appearance light|dark
+#   ios-sim.sh statusbar [clear]   9:41, full battery and bars (App Store screenshots); clear undoes it
 #   ios-sim.sh photos-reset        revoke Photos and camera access (the next shot asks again)
 #   ios-sim.sh album [NAME]        what is in album NAME (default Tmp) in the simulator's Photos database
 #   ios-sim.sh log                 the app's Documents/tmp.log (needs TMP_QA_LOG=1)
 #   ios-sim.sh udid | shutdown
 #
 # Simulator by name: SIM_NAME (default "Tmp iPhone 16 iOS18"), created on first use as an iPhone 16 on the
-# newest iOS 18 runtime (SIM_RUNTIME=<runtime id> to override). No other simulator is touched.
+# newest iOS 18 runtime (SIM_RUNTIME=<runtime id> and SIM_DEVICE=<device type, e.g. iPhone-17-Pro-Max> to
+# override). No other simulator is touched.
 # Every TMP_* variable reaches the app as SIMCTL_CHILD_TMP_* (and UI tests as TEST_RUNNER_TMP_*):
 #   TMP_TIME_SCALE=3600 TMP_QA_LOG=1 ios/scripts/ios-sim.sh
 # Switches are listed in qa/README.md.
@@ -38,7 +40,7 @@ if [ "$(uname)" != Darwin ]; then
       || { echo "FAIL: copying the tree to $HOST:$R"; exit 1; }
   fi
   ENVS=""
-  for n in $(app_vars) SIM_NAME SIM_RUNTIME; do
+  for n in $(app_vars) SIM_NAME SIM_RUNTIME SIM_DEVICE; do
     eval "v=\${$n-}"; eval "set_=\${$n+x}"
     [ -n "$set_" ] && ENVS="$ENVS $n=$(q "$v")"
   done
@@ -65,7 +67,7 @@ U=$(udid)
 if [ -z "$U" ]; then
   RT=${SIM_RUNTIME:-$(xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)]
     | (map(select(.version | startswith("18."))) | last) // last | .identifier')}
-  U=$(xcrun simctl create "$NAME" com.apple.CoreSimulator.SimDeviceType.iPhone-16 "$RT")
+  U=$(xcrun simctl create "$NAME" "com.apple.CoreSimulator.SimDeviceType.${SIM_DEVICE:-iPhone-16}" "$RT")
   echo "created simulator $NAME ($U) on $RT"
 fi
 
@@ -158,6 +160,15 @@ case "$CMD" in
     fi ;;
   shot) mkdir -p "$QA"; xcrun simctl io "$U" screenshot "$QA/${1:-shot}.png" >/dev/null && echo "$QA/${1:-shot}.png" ;;
   appearance) boot; xcrun simctl ui "$U" appearance "${1:-light}"; echo "appearance ${1:-light}" ;;
+  statusbar)
+    boot
+    if [ "${1:-}" = clear ]; then
+      xcrun simctl status_bar "$U" clear; echo "status bar cleared"
+    else
+      xcrun simctl status_bar "$U" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
+        --cellularMode active --cellularBars 4 --batteryState discharging --batteryLevel 100
+      echo "status bar 9:41, full"
+    fi ;;
   photos-reset)
     boot
     xcrun simctl privacy "$U" reset photos "$BUNDLE" 2>/dev/null || true
@@ -167,5 +178,5 @@ case "$CMD" in
   log) cat "$(container)/Documents/tmp.log" ;;
   udid) echo "$U" ;;
   shutdown) xcrun simctl shutdown "$U" 2>/dev/null || true; echo "shut down $NAME" ;;
-  *) sed -n '2,24p' "$0"; exit 2 ;;
+  *) sed -n '2,26p' "$0"; exit 2 ;;
 esac

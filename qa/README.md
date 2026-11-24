@@ -26,7 +26,10 @@ and to UI tests (as `TEST_RUNNER_TMP_*`). All are off in a normal launch.
 | `TMP_RESET=1` | Forget tracked shots, settings and the QA log at launch. Photos are not touched. |
 | `TMP_QA_LOG=1` | Write `Documents/tmp.log` (identifiers and events only). Read it with `ios-sim.sh log`. |
 | `TMP_QA_SEED_FOREIGN=1` | Debug builds only. After Photos access is granted, add one photo to the album that the app does not track. Clear must never delete it. |
+| `TMP_DEMO_PHOTOS=1` | Debug builds only, for App Store screenshots. The mock camera shows and saves stand-in photos (`Camera/DemoScenes.swift`: a parking level sign, a receipt, a router sticker, a test page, a sticky note, a paint chip) instead of numbered test frames, and hides the "Test mode" pill and Settings' Testing section. |
+| `TMP_DEMO_AGES=20,16,12.5` | Debug builds only. Backdates the capture time of shot 1, 2, 3... of a camera visit by that many hours, so the grid shows real times left (or shots already expired, past 24) without the fast clock, whose times read in seconds. |
 | `TMP_SHOT_TAG=light` | UI tests only: prefix for screenshot names. |
+| `TMP_STORE_SHOTS=1` | UI tests only: runs `StoreShotsUITests` (skipped otherwise). Use `store/tools/shots.sh`. |
 
 ## What `qa/e2e.sh` proves
 
@@ -45,6 +48,12 @@ and to UI tests (as `TEST_RUNNER_TMP_*`). All are off in a normal launch.
 
 Screenshots are numbered in flow order (`light-01-intro.png` to `dark-15-straight-to-camera.png`). Look at
 them: the tests check behaviour, not alignment, clipping or contrast.
+
+## App Store screenshots
+
+`store/tools/shots.sh` runs `StoreShotsUITests` on an iPhone 17 Pro Max iOS 26 simulator (its own, created on
+first use) with `TMP_DEMO_PHOTOS` and a 9:41 status bar (`ios-sim.sh statusbar`), then captions the shots with
+`store/tools/captions.py`. Details in `store/CHECKLIST.md`.
 
 ## What the simulator cannot show
 

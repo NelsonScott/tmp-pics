@@ -158,7 +158,7 @@ final class AppModel: ObservableObject {
         do {
             let data = try await camera.capture(flash: flash)
             let saved = try await library.save(data, albumName: albumName)
-            let captured = Date()
+            let captured = Date().addingTimeInterval(-QA.demoAge(shot: cameraSessionShots.count + 1))
             update { $0.track(id: saved.id, capturedAt: captured, lifetime: lifetime, timeScale: timeScale) }
             cameraSessionShots.append(saved.id)
             if camera.isMock, QA.log { QALog.write("camera: mock got \(PhotoInfo(data: data).map(\.description) ?? "unreadable")") }

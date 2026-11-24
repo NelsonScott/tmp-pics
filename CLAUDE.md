@@ -20,6 +20,7 @@ only the assets it created and clears expired ones with one batched delete (iOS 
 - `Camera/Camera.swift`: `RealCamera` (AVFoundation on its own queue, rotation coordinator, full-size
   photos) and `MockCamera` (generated frames and JPEGs). `Camera/CaptureMath.swift`: the pure, tested parts
   (largest photo size, angle to Exif orientation, reading a photo's size and orientation).
+  `Camera/DemoScenes.swift`: debug-only stand-in photos for App Store screenshots (`TMP_DEMO_PHOTOS`).
 - `App/AppModel.swift`: state and actions. `App/QA.swift`: launch switches and the opt-in QA log.
 - `Views/`: intro (first run), home (grid, summary, expired banner, camera button), camera (full screen,
   stays open between shots), viewer, settings. `App/TmpCameraApp.swift` picks intro or home.
@@ -30,6 +31,8 @@ only the assets it created and clears expired ones with one batched delete (iOS 
 - Run it: `TMP_TIME_SCALE=1440 TMP_QA_LOG=1 ios/scripts/ios-sim.sh`, then `shot NAME`, `log`, `album Tmp`.
   Always finish with `ios/scripts/ios-sim.sh shutdown`.
 - Switches and what the flow proves: `qa/README.md`.
+- App Store package (listing, privacy answers, review notes, screenshots, what is left): `store/`, start at
+  `store/CHECKLIST.md`. Screenshots: `store/tools/shots.sh`.
 
 ## Rules
 - Never add networking code, a dependency, analytics or crash reporting. The README says so; the grep

@@ -52,7 +52,7 @@ struct SettingsScreen: View {
                     Text("Privacy")
                 }
 
-                if QA.anyActive {
+                if QA.anyActive && !QA.demoPhotos {
                     Section("Testing") {
                         LabeledContent("Camera", value: model.camera.isMock ? "Mock" : "Real")
                         LabeledContent("Clock", value: model.timeScale == 1 ? "Normal" : "\(Int(model.timeScale))x faster")

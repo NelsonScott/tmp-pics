@@ -37,6 +37,24 @@ enum QA {
     static var seedForeign: Bool { false }
     #endif
 
+    #if DEBUG
+    /// TMP_DEMO_PHOTOS=1 (debug builds only): for App Store screenshots. The mock camera shows and saves
+    /// stand-in photos (DemoScenes: a parking level sign, a receipt, a router sticker...) instead of numbered
+    /// test frames, and the "Test mode" pill and Settings' Testing section are hidden.
+    static var demoPhotos: Bool { env["TMP_DEMO_PHOTOS"] == "1" }
+
+    /// TMP_DEMO_AGES=20,16,12.5 (debug builds only): hours to backdate the capture time of shot 1, 2, 3...
+    /// of a camera visit, so App Store screenshots show real "23h" labels, or shots already expired (> 24),
+    /// without the fast clock (which shows its times in seconds). Shots past the list are not backdated.
+    static func demoAge(shot number: Int) -> TimeInterval {
+        let ages = (env["TMP_DEMO_AGES"] ?? "").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        return number >= 1 && number <= ages.count ? ages[number - 1] * 3600 : 0
+    }
+    #else
+    static var demoPhotos: Bool { false }
+    static func demoAge(shot number: Int) -> TimeInterval { 0 }
+    #endif
+
     static var anyActive: Bool { timeScale != 1 || env["TMP_MOCK_CAMERA"] == "1" }
 }
 

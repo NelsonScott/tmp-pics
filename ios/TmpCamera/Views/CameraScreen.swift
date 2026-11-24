@@ -53,7 +53,7 @@ struct CameraScreen: View {
             }
             .accessibilityIdentifier("camera-done")
             Spacer()
-            if model.timeScale != 1 || model.camera.isMock {
+            if (model.timeScale != 1 || model.camera.isMock) && !QA.demoPhotos {
                 Text(model.camera.isMock ? "Test mode" : "Fast clock")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.black)
@@ -81,7 +81,7 @@ struct CameraScreen: View {
             .overlay {
                 ZStack {
                     if model.camera.isMock {
-                        MockPreview(zoom: zoom, front: front)
+                        MockPreview(zoom: zoom, front: front, next: (model.camera as? MockCamera)?.nextNumber ?? 1)
                     } else if model.cameraAccess == .granted, let real = model.camera as? RealCamera {
                         CameraPreview(camera: real)
                     } else {

@@ -289,6 +289,8 @@ final class MockCamera: Camera {
     private(set) var position: AVCaptureDevice.Position = .back
     private(set) var zoom: CGFloat = 1
     private var count = 0
+    /// The shot number the next capture gets (the demo viewfinder shows that scene).
+    var nextNumber: Int { count + 1 }
     let hasFlash = true
     let maxZoom: CGFloat = 5
 
@@ -300,6 +302,12 @@ final class MockCamera: Camera {
 
     func capture(flash: Bool) async throws -> Data {
         count += 1
+        #if DEBUG
+        if QA.demoPhotos {
+            guard let data = DemoScenes.photo(count).jpegData(compressionQuality: 0.85) else { throw CameraError.noData }
+            return data
+        }
+        #endif
         let image = MockFrames.photo(number: count, date: Date(), front: position == .front, zoom: zoom)
         guard let data = image.jpegData(compressionQuality: 0.85) else { throw CameraError.noData }
         return data
@@ -348,8 +356,26 @@ enum MockFrames {
 struct MockPreview: View {
     let zoom: CGFloat
     let front: Bool
+    var next = 1
 
     var body: some View {
+        #if DEBUG
+        if QA.demoPhotos {
+            // The scene the shutter will save, filling the 3:4 viewfinder like a live preview.
+            Image(uiImage: DemoScenes.photo(next))
+                .resizable()
+                .scaledToFill()
+                .scaleEffect(zoom)
+                .accessibilityIdentifier("mock-preview")
+        } else {
+            pattern
+        }
+        #else
+        pattern
+        #endif
+    }
+
+    private var pattern: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 15)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             ZStack {
