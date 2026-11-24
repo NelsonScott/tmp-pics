@@ -22,6 +22,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         PRODUCT_NAME: TmpCamera
+        TARGETED_DEVICE_FAMILY: "1"   # iPhone only; xcodegen's target default is 1,2
         INFOPLIST_FILE: TmpCamera/Resources/Info.plist
         SUPPORTS_MACCATALYST: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
