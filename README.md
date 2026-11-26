@@ -9,6 +9,8 @@ A camera for photos you only need for a day. Open source, no network code.
 [![Tests](https://github.com/NelsonScott/tmp-pics/actions/workflows/tests.yml/badge.svg)](https://github.com/NelsonScott/tmp-pics/actions/workflows/tests.yml)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
+[![Download on the App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/app/id6838589036)
+
 <img src="docs/intro.png" width="240" alt="First run screen"> <img src="docs/home.png" width="240" alt="Home screen"> <img src="docs/settings.png" width="240" alt="Settings">
 
 </div>
@@ -39,9 +41,9 @@ while the app is closed is deleted the next time you open it. Deleting the app d
 
 No ads, no account, no analytics, no network code, and it never reads your photo library. It is open source, so you can read all of it.
 
-## Build it yourself
+## Get it
 
-Needs iOS 17 or later, iPhone only. You need a Mac with Xcode and [xcodegen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+It is free on the [App Store](https://apps.apple.com/app/id6838589036). Or build it yourself: it needs iOS 17 or later, iPhone only. You need a Mac with Xcode and [xcodegen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 ```sh
 git clone https://github.com/NelsonScott/tmp-pics.git
